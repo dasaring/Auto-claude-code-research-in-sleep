@@ -13,12 +13,13 @@ use crossterm::{
 
 const MAX_DROPDOWN: usize = 10;
 
-/// Per-read renderer state: tracks where the cursor was last drawn so we can
-/// move back to the start of the input area before clearing, even when the
-/// buffer wraps across multiple physical rows.
+/// Per-read renderer state: tracks the logical row index of the last drawn
+/// cursor so we can move back to the start of the input area before clearing.
+/// Row-based (not width-based) so that wide CJK chars at the right edge,
+/// which terminals pre-wrap before drawing, are accounted for correctly.
 #[derive(Debug, Default)]
 struct RenderState {
-    cursor_display_width: usize,
+    cursor_row: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,9 +324,8 @@ impl LineEditor {
         let matches = self.compute_matches(&line);
         let prompt_len = visible_len(&self.prompt);
         let term_w = terminal_width();
-        let total_display_width = prompt_len + buf_display_width(buf, buf.len());
-        let input_rows = display_rows(total_display_width, term_w);
-        let cursor_display_width = prompt_len + buf_display_width(buf, cursor_pos);
+        let input_rows = layout_rows(prompt_len, buf, term_w);
+        let (cursor_row, cursor_col) = layout_position(prompt_len, buf, cursor_pos, term_w);
 
         // Jump back to the start of the previously drawn input area (handles
         // multi-row wrap) and clear everything that was drawn last time.
@@ -396,10 +396,10 @@ impl LineEditor {
             stdout,
             input_rows,
             dropdown_rows,
-            cursor_display_width,
-            term_w,
+            cursor_row,
+            cursor_col,
         )?;
-        render.cursor_display_width = cursor_display_width;
+        render.cursor_row = cursor_row;
         stdout.flush()
     }
 
@@ -414,16 +414,15 @@ impl LineEditor {
         let line: String = buf.iter().collect();
         let prompt_len = visible_len(&self.prompt);
         let term_w = terminal_width();
-        let total_display_width = prompt_len + buf_display_width(buf, buf.len());
-        let input_rows = display_rows(total_display_width, term_w);
-        let cursor_display_width = prompt_len + buf_display_width(buf, cursor_pos);
+        let input_rows = layout_rows(prompt_len, buf, term_w);
+        let (cursor_row, cursor_col) = layout_position(prompt_len, buf, cursor_pos, term_w);
 
         move_to_input_start(stdout, render, term_w)?;
         stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
         stdout.queue(Print(&self.prompt))?;
         stdout.queue(Print(&line))?;
-        move_to_input_cursor(stdout, input_rows, 0, cursor_display_width, term_w)?;
-        render.cursor_display_width = cursor_display_width;
+        move_to_input_cursor(stdout, input_rows, 0, cursor_row, cursor_col)?;
+        render.cursor_row = cursor_row;
         stdout.flush()
     }
 
@@ -439,7 +438,14 @@ impl LineEditor {
         stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
         stdout.queue(Print(&self.prompt))?;
         stdout.queue(Print(accepted))?;
-        render.cursor_display_width = visible_len(&self.prompt) + visible_len(accepted);
+        let accepted_chars: Vec<char> = accepted.chars().collect();
+        let (cursor_row, _) = layout_position(
+            visible_len(&self.prompt),
+            &accepted_chars,
+            accepted_chars.len(),
+            term_w,
+        );
+        render.cursor_row = cursor_row;
         stdout.flush()
     }
 
@@ -498,11 +504,10 @@ fn terminal_width() -> usize {
 fn move_to_input_start(
     stdout: &mut io::Stdout,
     render: &RenderState,
-    term_w: usize,
+    _term_w: usize,
 ) -> io::Result<()> {
-    let (cursor_row, _) = display_position(render.cursor_display_width, term_w);
-    if cursor_row > 0 {
-        stdout.queue(cursor::MoveToPreviousLine(cursor_row))?;
+    if render.cursor_row > 0 {
+        stdout.queue(cursor::MoveToPreviousLine(render.cursor_row))?;
     }
     stdout.queue(cursor::MoveToColumn(0))?;
     Ok(())
@@ -510,15 +515,14 @@ fn move_to_input_start(
 
 /// After drawing the prompt+buffer (cursor naturally at the end of input,
 /// followed by `dropdown_rows` extra rows below), move the cursor back to the
-/// logical position within the input area.
+/// logical (row, col) position within the input area.
 fn move_to_input_cursor(
     stdout: &mut io::Stdout,
     input_rows: u16,
     dropdown_rows: u16,
-    cursor_display_width: usize,
-    term_w: usize,
+    cursor_row: u16,
+    cursor_col: u16,
 ) -> io::Result<()> {
-    let (cursor_row, cursor_col) = display_position(cursor_display_width, term_w);
     let lines_after_cursor = input_rows
         .saturating_sub(1)
         .saturating_sub(cursor_row)
@@ -530,22 +534,91 @@ fn move_to_input_cursor(
     Ok(())
 }
 
-/// Number of physical rows needed to display `display_width` columns at the
-/// given terminal width. Always at least 1.
-fn display_rows(display_width: usize, term_w: usize) -> u16 {
-    let term_w = term_w.max(1);
-    let rows = display_width
-        .saturating_add(term_w - 1)
-        .checked_div(term_w)
-        .unwrap_or(1)
-        .max(1);
-    rows.min(u16::MAX as usize) as u16
+/// Total physical rows occupied by prompt + buffer at the given terminal
+/// width, simulating actual terminal cell layout (handles wide CJK chars
+/// that pre-wrap at the right edge).
+fn layout_rows(prompt_width: usize, buf: &[char], term_w: usize) -> u16 {
+    let (row, _) = layout_position(prompt_width, buf, buf.len(), term_w);
+    row.saturating_add(1)
 }
 
-/// Convert a display width (columns from row 0) into (row, col). For widths
-/// that land exactly on the terminal boundary we report the *previous* row's
-/// rightmost column to match where terminals actually leave the cursor before
-/// auto-wrapping.
+/// Compute (row, col) for the cursor positioned after the first `pos`
+/// chars of `buf`, when prompt of width `prompt_width` precedes the buffer.
+///
+/// Models terminal behavior precisely:
+/// - ASCII chars take 1 cell; CJK / wide chars take 2 cells (per `char_width`).
+/// - If a wide char would land partially past the right edge, the terminal
+///   pre-wraps to the next row before drawing it (so cursor never lands
+///   inside a wide-char cell).
+/// - After filling the last cell of a row, the cursor stays at (row, term_w-1)
+///   with a pending-wrap flag — terminals don't physically advance to the
+///   next row until the next char is drawn.
+fn layout_position(
+    prompt_width: usize,
+    buf: &[char],
+    pos: usize,
+    term_w: usize,
+) -> (u16, u16) {
+    let term_w = term_w.max(1);
+    let mut row = 0usize;
+    let mut col = 0usize;
+    let mut pending_wrap = false;
+
+    for _ in 0..prompt_width {
+        advance_layout(&mut row, &mut col, &mut pending_wrap, 1, term_w);
+    }
+    for &ch in &buf[..pos.min(buf.len())] {
+        advance_layout(
+            &mut row,
+            &mut col,
+            &mut pending_wrap,
+            char_width(ch),
+            term_w,
+        );
+    }
+
+    (
+        row.min(u16::MAX as usize) as u16,
+        col.min(u16::MAX as usize) as u16,
+    )
+}
+
+/// Advance a (row, col) cursor by `width` cells, respecting terminal pre-wrap
+/// behavior for wide chars and pending-wrap at row boundaries.
+fn advance_layout(
+    row: &mut usize,
+    col: &mut usize,
+    pending_wrap: &mut bool,
+    width: usize,
+    term_w: usize,
+) {
+    let width = width.min(term_w);
+    if width == 0 {
+        return;
+    }
+    if *pending_wrap {
+        *row = row.saturating_add(1);
+        *col = 0;
+        *pending_wrap = false;
+    }
+    if width > 1 && *col + width > term_w {
+        *row = row.saturating_add(1);
+        *col = 0;
+    }
+    *col += width;
+    if *col == term_w {
+        if width > 1 {
+            *row = row.saturating_add(1);
+            *col = 0;
+        } else {
+            *col = term_w - 1;
+            *pending_wrap = true;
+        }
+    }
+}
+
+/// Deprecated: kept for any external/test reference. Use `layout_position`.
+#[cfg(test)]
 fn display_position(display_width: usize, term_w: usize) -> (u16, u16) {
     let term_w = term_w.max(1);
     if display_width == 0 {
@@ -835,6 +908,40 @@ mod tests {
     fn clip_truncates_long_strings() {
         assert_eq!(clip("hello world", 5), "hell…");
         assert_eq!(clip("short", 10), "short");
+    }
+
+    #[test]
+    fn layout_position_handles_cjk_non_boundary() {
+        let mut buf = vec!['a'; 100];
+        buf.push('你');
+        assert_eq!(super::layout_position(0, &buf, buf.len(), 120), (0, 102));
+        buf.push('是');
+        assert_eq!(super::layout_position(0, &buf, buf.len(), 120), (0, 104));
+    }
+
+    #[test]
+    fn layout_position_keeps_cursor_out_of_wide_char_at_wrap_boundary() {
+        // 118 ASCII chars fill cols 0..117 on row 0. Wide char at col 118
+        // would need cols 118..119; that exactly fits, takes both cells,
+        // col reaches term_w → wide char triggers row += 1, col = 0.
+        // Cursor lands at (1, 0).
+        let mut ends_at_boundary = vec!['a'; 118];
+        ends_at_boundary.push('是');
+        assert_eq!(
+            super::layout_position(0, &ends_at_boundary, ends_at_boundary.len(), 120),
+            (1, 0)
+        );
+        assert_eq!(super::layout_rows(0, &ends_at_boundary, 120), 2);
+
+        // 119 ASCII chars: cols 0..118 ASCII, col 119 = last ASCII char,
+        // col reaches term_w → pending_wrap = true. Wide char sees
+        // pending_wrap → jumps to (1, 0), takes cols 0..1, cursor (1, 2).
+        let mut wraps_before_wide = vec!['a'; 119];
+        wraps_before_wide.push('谁');
+        assert_eq!(
+            super::layout_position(0, &wraps_before_wide, wraps_before_wide.len(), 120),
+            (1, 2)
+        );
     }
 
     #[test]
