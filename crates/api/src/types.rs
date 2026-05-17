@@ -221,11 +221,18 @@ pub enum OutputContentBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
+    /// Anthropic streaming may send `usage` blocks with only the field(s)
+    /// that changed for that event (e.g. `{"output_tokens": 15}` on a
+    /// MessageDelta, while `input_tokens` lives in MessageStart). All
+    /// fields default to 0 so partial JSON deserialises without losing
+    /// the surrounding event.
+    #[serde(default)]
     pub input_tokens: u32,
     #[serde(default)]
     pub cache_creation_input_tokens: u32,
     #[serde(default)]
     pub cache_read_input_tokens: u32,
+    #[serde(default)]
     pub output_tokens: u32,
 }
 

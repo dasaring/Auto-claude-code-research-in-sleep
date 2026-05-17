@@ -3767,6 +3767,10 @@ impl ApiClient for AnthropicRuntimeClient {
             let mut pending_tool: Option<(String, String, String)> = None;
         let mut pending_thinking: Option<(String, String)> = None;
             let mut saw_stop = false;
+            // v0.4.10 T35: cache initial input/cache token usage from
+            // MessageStart so the eventual MessageDelta can merge them
+            // into a complete TokenUsage event.
+            let mut start_usage: Option<api::Usage> = None;
 
             while let Some(event) = stream
                 .next_event()
@@ -3780,6 +3784,14 @@ impl ApiClient for AnthropicRuntimeClient {
                 }
                 match event {
                     ApiStreamEvent::MessageStart(start) => {
+                        // v0.4.10 T35: stash the initial input/cache token
+                        // counts. Anthropic streaming splits usage across
+                        // message_start (input + cache) and message_delta
+                        // (output), so we have to remember the start
+                        // numbers and merge them on the final delta. The
+                        // previous code only used delta.usage and lost
+                        // input/cache entirely.
+                        start_usage = Some(start.message.usage.clone());
                         for block in start.message.content {
                             push_output_block(block, out, &mut events, &mut pending_tool, true)?;
                         }
@@ -3850,11 +3862,25 @@ impl ApiClient for AnthropicRuntimeClient {
                         }
                     }
                     ApiStreamEvent::MessageDelta(delta) => {
+                        // v0.4.10 T35 / C8 landmine fix: merge the
+                        // earlier MessageStart usage (input/cache) with
+                        // this delta's output_tokens before emitting,
+                        // since the streaming protocol splits them.
+                        // Falls back to delta-only if MessageStart was
+                        // somehow missed (defensive — should not happen
+                        // on a well-formed stream).
+                        let start = start_usage.as_ref();
                         events.push(AssistantEvent::Usage(TokenUsage {
-                            input_tokens: delta.usage.input_tokens,
+                            input_tokens: start
+                                .map(|u| u.input_tokens)
+                                .unwrap_or(delta.usage.input_tokens),
                             output_tokens: delta.usage.output_tokens,
-                            cache_creation_input_tokens: 0,
-                            cache_read_input_tokens: 0,
+                            cache_creation_input_tokens: start
+                                .map(|u| u.cache_creation_input_tokens)
+                                .unwrap_or(delta.usage.cache_creation_input_tokens),
+                            cache_read_input_tokens: start
+                                .map(|u| u.cache_read_input_tokens)
+                                .unwrap_or(delta.usage.cache_read_input_tokens),
                         }));
                     }
                     ApiStreamEvent::MessageStop(_) => {

@@ -279,6 +279,12 @@ impl ApiClient for OpenAIRuntimeClient {
         let mut body = json!({
             "model": self.model,
             "stream": true,
+            // v0.4.10 T35: OpenAI Chat Completions API does NOT emit
+            // `usage` in streaming chunks by default. Opt in with
+            // `stream_options.include_usage = true` so we can read
+            // `prompt_tokens_details.cached_tokens` (automatic prefix
+            // cache hits) and report token cost accurately.
+            "stream_options": { "include_usage": true },
             "messages": messages,
         });
 
@@ -583,7 +589,17 @@ on a compatible third-party proxy, or use Claude/another provider as executor an
                         Err(_) => continue,
                     };
 
-                    // Extract usage if present (some providers send it)
+                    // Extract usage if present (some providers send it).
+                    // v0.4.10 T35: read OpenAI's automatic prefix-cache hit
+                    // counter from `usage.prompt_tokens_details.cached_tokens`
+                    // so /cost and the usage tracker reflect cache savings.
+                    // OpenAI's API automatically caches request prefixes
+                    // >1024 tokens — the cached portion is billed at a
+                    // discount, and previously aris-code threw the number
+                    // away (always 0). Anthropic-style cache_creation
+                    // doesn't have a direct equivalent on OpenAI; we leave
+                    // it 0 (their automatic write-on-first-use is not
+                    // reported as a separate quantity).
                     if let Some(usage) = parsed.get("usage") {
                         let input_tokens =
                             usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -591,11 +607,16 @@ on a compatible third-party proxy, or use Claude/another provider as executor an
                             .get("completion_tokens")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as u32;
+                        let cached_tokens = usage
+                            .get("prompt_tokens_details")
+                            .and_then(|d| d.get("cached_tokens"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as u32;
                         events.push(AssistantEvent::Usage(TokenUsage {
                             input_tokens,
                             output_tokens,
                             cache_creation_input_tokens: 0,
-                            cache_read_input_tokens: 0,
+                            cache_read_input_tokens: cached_tokens,
                         }));
                     }
 
