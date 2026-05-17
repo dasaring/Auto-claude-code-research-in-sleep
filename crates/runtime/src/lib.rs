@@ -91,15 +91,6 @@ pub use usage::{
     format_usd, pricing_for_model, ModelPricing, TokenUsage, UsageCostEstimate, UsageTracker,
 };
 
-/// Look up a bundled helper resource by key (e.g., "research-wiki/research_wiki.py").
-#[must_use]
-pub fn bundled_resource(key: &str) -> Option<&'static str> {
-    BUNDLED_RESOURCES
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, content)| *content)
-}
-
 /// Cross-platform home directory. Uses HOME on Unix, USERPROFILE on Windows.
 #[must_use]
 pub fn home_dir() -> String {
