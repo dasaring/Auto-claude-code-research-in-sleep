@@ -134,6 +134,12 @@ pub enum InputContentBlock {
     },
     Thinking {
         thinking: String,
+        // Third-party Anthropic-compat proxies (newcli.com, ModelScope,
+        // OpenRouter Claude, etc.) frequently omit the redaction signature
+        // even when the model emits a thinking block. Treat as optional
+        // so the JSON parser doesn't fail the whole stream; serialise as
+        // empty string when missing, which official Anthropic ignores.
+        #[serde(default)]
         signature: String,
     },
 }
@@ -198,6 +204,8 @@ pub enum OutputContentBlock {
     },
     Thinking {
         thinking: String,
+        // See InputContentBlock::Thinking above — same proxy-compat reason.
+        #[serde(default)]
         signature: String,
     },
 }

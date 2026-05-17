@@ -368,7 +368,16 @@ impl ContentBlock {
             }),
             "thinking" => Ok(Self::Thinking {
                 thinking: required_string(object, "thinking")?,
-                signature: required_string(object, "signature")?,
+                // Third-party Anthropic-compat proxies often omit the
+                // redaction signature even on thinking blocks; treat as
+                // optional with empty-string default to keep the JSON
+                // parser from failing the whole conversation. Matches
+                // the serde behaviour in api::types::{Input,Output}ContentBlock.
+                signature: object
+                    .get("signature")
+                    .and_then(JsonValue::as_str)
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_default(),
             }),
             other => Err(SessionError::Format(format!(
                 "unsupported block type: {other}"
