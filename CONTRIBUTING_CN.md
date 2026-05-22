@@ -54,6 +54,7 @@ allowed-tools: Read, Write, Bash(*)
 1. 安装你修改的 Skill：`cp -r skills/your-skill ~/.claude/skills/`
 2. 在 Claude Code 中测试：`/your-skill 测试参数`
 3. 验证 Skill 按预期工作
+4. 建议同时用 `--dry-run` 模式（如支持）先做一次预检，避免误操作
 
 ## Pull Request 流程
 
@@ -67,6 +68,7 @@ allowed-tools: Read, Write, Bash(*)
 - [ ] 代码符合项目风格
 - [ ] 文档已更新（如适用）
 - [ ] 更改已在本地测试
+- [ ] 新增 Skill 已在 README 的 Skill 列表中注明
 
 ## 行为准则
 
