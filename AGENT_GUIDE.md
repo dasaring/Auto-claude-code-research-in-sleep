@@ -51,16 +51,12 @@ Controls whether mandatory audits gate the final report. `lite` / `balanced` def
 
 ```
 — human checkpoint: true | false             # pause for approval (default: true)  # changed from false — I prefer manual gates
-— AUTO_PROCEED: true | false                 # auto-continue at gates (default: true)
-— difficulty: medium | hard | nightmare      # reviewer adversarial level
+— AUTO_PROCEED: true | false                 # auto-continue at gates (default: false)  # changed to false — avoids runaway sessions
+— difficulty: medium | hard | nightmare      # reviewer adversarial level (personal default: hard)
 — venue: ICLR | NeurIPS | ICML | ...         # target venue
-— sources: web, zotero, deepxiv, exa, ...    # literature sources
-— gpu: local | remote | vast | modal         # GPU backend
-— reviewer: codex | oracle-pro               # reviewer routing
+— sources: web, zotero, deepxiv, exa, ...    # literature source
 ```
 
-### Scoped flags (skill-specific)
-
-| Flag | Skill | Effect |
-|------|-------|--------|
-| `--- st
+> **Personal defaults I use most often:**
+> `effort: lite`, `assurance: draft`, `difficulty: hard`, `AUTO_PROCEED: false`
+> Works well for quick idea validation without burning API budget.
