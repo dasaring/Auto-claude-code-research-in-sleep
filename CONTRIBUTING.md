@@ -54,6 +54,7 @@ Before submitting:
 1. Install your modified skill: `cp -r skills/your-skill ~/.claude/skills/`
 2. Test in Claude Code: `/your-skill test argument`
 3. Verify the skill works as expected
+4. Run a quick sanity check by listing installed skills: `ls ~/.claude/skills/`
 
 ## Pull Request Process
 
@@ -67,6 +68,7 @@ Before submitting:
 - [ ] Code follows the project style
 - [ ] Documentation is updated (if applicable)
 - [ ] Changes are tested locally
+- [ ] Skill frontmatter is valid YAML (no tab characters, proper quoting)
 
 ## Code of Conduct
 
