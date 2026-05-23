@@ -55,6 +55,7 @@ Before submitting:
 2. Test in Claude Code: `/your-skill test argument`
 3. Verify the skill works as expected
 4. Run a quick sanity check by listing installed skills: `ls ~/.claude/skills/`
+5. If the skill uses Bash, also test edge cases with empty or unexpected input
 
 ## Pull Request Process
 
@@ -69,6 +70,7 @@ Before submitting:
 - [ ] Documentation is updated (if applicable)
 - [ ] Changes are tested locally
 - [ ] Skill frontmatter is valid YAML (no tab characters, proper quoting)
+- [ ] Tested with at least one real research task end-to-end
 
 ## Code of Conduct
 
