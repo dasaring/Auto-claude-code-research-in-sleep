@@ -56,6 +56,7 @@ allowed-tools: Read, Write, Bash(*)
 3. 验证 Skill 按预期工作
 4. 建议同时用 `--dry-run` 模式（如支持）先做一次预检，避免误操作
 5. 如果 Skill 涉及文件写入，建议在临时目录中先验证输出结果
+6. 建议在测试完成后检查 `~/.claude/skills/` 目录，确认安装路径正确，避免旧版本残留
 
 ## Pull Request 流程
 
