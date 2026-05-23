@@ -55,6 +55,7 @@ allowed-tools: Read, Write, Bash(*)
 2. 在 Claude Code 中测试：`/your-skill 测试参数`
 3. 验证 Skill 按预期工作
 4. 建议同时用 `--dry-run` 模式（如支持）先做一次预检，避免误操作
+5. 如果 Skill 涉及文件写入，建议在临时目录中先验证输出结果
 
 ## Pull Request 流程
 
