@@ -58,6 +58,8 @@ allowed-tools: Read, Write, Bash(*)
 5. 如果 Skill 涉及文件写入，建议在临时目录中先验证输出结果
 6. 建议在测试完成后检查 `~/.claude/skills/` 目录，确认安装路径正确，避免旧版本残留
 
+> **个人备注**：我通常会在 `~/aris-test/` 下建一个专用测试目录，把临时 Skill 安装到那里再测，这样不会污染主目录下的 `~/.claude/skills/`。
+
 ## Pull Request 流程
 
 1. 确保你的更改有完善的文档说明
