@@ -59,6 +59,8 @@ allowed-tools: Read, Write, Bash(*)
 6. 建议在测试完成后检查 `~/.claude/skills/` 目录，确认安装路径正确，避免旧版本残留
 
 > **个人备注**：我通常会在 `~/aris-test/` 下建一个专用测试目录，把临时 Skill 安装到那里再测，这样不会污染主目录下的 `~/.claude/skills/`。
+>
+> 另外，测试完成后记得用 `ls -la ~/.claude/skills/` 检查一下文件权限，确保 Skill 文件是可读的（权限至少为 `644`），否则 Claude Code 可能无法正确加载。
 
 ## Pull Request 流程
 
