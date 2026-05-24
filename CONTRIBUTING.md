@@ -56,6 +56,7 @@ Before submitting:
 3. Verify the skill works as expected
 4. Run a quick sanity check by listing installed skills: `ls ~/.claude/skills/`
 5. If the skill uses Bash, also test edge cases with empty or unexpected input
+6. Check that the skill's output is deterministic across at least two separate runs
 
 ## Pull Request Process
 
@@ -71,6 +72,7 @@ Before submitting:
 - [ ] Changes are tested locally
 - [ ] Skill frontmatter is valid YAML (no tab characters, proper quoting)
 - [ ] Tested with at least one real research task end-to-end
+- [ ] Skill produces consistent results across multiple runs (no flaky behavior)
 
 ## Code of Conduct
 
