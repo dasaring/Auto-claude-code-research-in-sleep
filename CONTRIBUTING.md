@@ -57,6 +57,7 @@ Before submitting:
 4. Run a quick sanity check by listing installed skills: `ls ~/.claude/skills/`
 5. If the skill uses Bash, also test edge cases with empty or unexpected input
 6. Check that the skill's output is deterministic across at least two separate runs
+7. If testing on macOS, note that `cp -r` behavior differs slightly — use `cp -R` to be safe
 
 ## Pull Request Process
 
