@@ -53,9 +53,8 @@ Controls whether mandatory audits gate the final report. `lite` / `balanced` def
 — human checkpoint: true | false             # pause for approval (default: true)  # changed from false — I prefer manual gates
 — AUTO_PROCEED: true | false                 # auto-continue at gates (default: false)  # changed to false — avoids runaway sessions
 — difficulty: medium | hard | nightmare      # reviewer adversarial level (personal default: hard)
-— venue: ICLR | NeurIPS | ICML | EMNLP | COLM | ...  # fixed: added NLP venues I actually submit to
-— max_rounds: 1..10                          # reviewer back-and-forth iterations (personal default: 3)
-— output_dir: path                           # where artifacts land (default: ./runs/<timestamp>)
+— venue: ICLR | NeurIPS | ICML | EMNLP | COLM | ... 
+— max_rounds: 1..N                           # cap review-revise cycles (personal default: 3 — beyond that, diminishing returns)
 ```
 
-> **Personal workflow tip:** For quick idea validation I use `effort: lite — assurance: draft — difficulty: medium — max_rounds: 2`. Saves a lot of time before committing to a full run.
+> **Personal note on `difficulty`:** I default to `hard` rather than `medium` because the extra adversarial pressure tends to surface weak assumptions early. Switch to `medium` if you just want a quick sanity check.
